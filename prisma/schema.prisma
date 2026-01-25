@@ -1,0 +1,486 @@
+// ======================================================
+// ROOT PRISMA SETUP (Prisma 7 compatible)
+// ======================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// ENUMS
+// ======================================================
+
+enum Gender {
+  MALE
+  FEMALE
+  BINARY
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum Specialty {
+  CARDIOLOGIST
+  DERMATOLOGIST
+  PEDIATRICIAN
+  NEUROLOGIST
+  NEPHROLOGIST
+  GASTROENTEROLOGIST
+  ENDOCRINOLOGIST
+  PULMONOLOGIST
+  ONCOLOGIST
+  ORTHOPEDIC
+  OPHTHALMOLOGIST
+  OTOLARYNGOLOGIST
+  UROLOGIST
+  RHEUMATOLOGIST
+  PSYCHIATRIST
+  PSYCHOLOGIST
+  GENERAL_PHYSICIAN
+  GENERAL_SURGEON
+  RADIOLOGIST
+  PATHOLOGIST
+  HEMATOLOGIST
+  DENTIST
+  GYNECOLOGIST
+  OBSTETRICIAN
+  PLASTIC_SURGEON
+  VASCULAR_SURGEON
+  CARDIOTHORACIC_SURGEON
+  DERMATOSURGEON
+  INFECTIOUS_DISEASE_SPECIALIST
+  IMMUNOLOGIST
+  ANESTHESIOLOGIST
+  EMERGENCY_MEDICINE
+  SPORTS_MEDICINE
+  PAIN_MEDICINE
+  CRITICAL_CARE
+  PHYSIOTHERAPIST
+  NUTRITIONIST
+}
+
+enum Qualification {
+  MBBS
+  BDS
+  BPT
+  BHMS
+  BAMS
+  MD
+  MS
+  DNB
+  MDS
+  DM
+  MCH
+  MPH
+  MBA_HM
+  PHD
+  DO
+  FELLOWSHIP
+  PGD
+}
+
+enum SlotStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+  UNAVAILABLE
+  CANCELLED
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum PaymentMethod {
+  OFFLINE
+  ONLINE
+}
+
+// ======================================================
+// USER, ADMIN, DOCTOR, PATIENT MODELS
+// ======================================================
+
+model User {
+  id       String @id @default(cuid())
+  email    String @unique
+  phoneNo  String
+  name     String
+  password String
+  age      Int
+
+  gender Gender @default(MALE)
+  role   Role   @default(PATIENT)
+
+  address String
+
+  pinCode Int
+
+  
+  profileImageUrl String?
+  emailVerified   Boolean        @default(false)
+  isActive        Boolean        @default(true)
+  admin           Admin?
+  doctor          Doctor?
+  patient         Patient?
+  otp             Otp[]
+  accessLogs      AccessLog[]
+  auditLogs       AuditLog[]
+  chatMessages    ChatMessages[]
+  payments        Payment[]
+  notifications   Notification[]
+  
+  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime       @default(now())
+  location        Location       @relation(fields: [pinCode], references: [pincode])
+  bankAccounts    BankAccount[]
+}
+
+model Location {
+  pincode Int    @id @unique
+  city    String
+  state   String
+
+  user User[]
+}
+
+model Admin {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  managerId String?
+  manager   Admin?  @relation("AdminHierarchy", fields: [managerId], references: [id], onDelete: Cascade)
+  subAdmins Admin[] @relation("AdminHierarchy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([managerId])
+}
+
+model Doctor {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  specialty  Specialty
+  experience Int       @default(0)
+
+  fees      Int     @default(0)
+  doctorBio String?
+  balance   Int     @default(0) // Balance in paise (smallest currency unit)
+
+  user             User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaves           Leave[]
+  schedule         Schedule?
+  patientRelations DoctorPatientRelation[]
+  appointments     Appointment[]
+  slots            Slot[]
+  comments         Comment[]
+  ratings          Rating[]
+  withdrawals      Withdrawal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctorQualifications DoctorQualification[]
+}
+
+model DoctorQualification {
+  id            String        @id @default(cuid())
+  doctorId      String
+  doctor        Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  qualification Qualification
+
+  @@unique([doctorId, qualification])
+}
+
+model Patient {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  medicalHistory     String @default("")
+  allergies          String @default("")
+  currentMedications String @default("")
+  
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctorRelations DoctorPatientRelation[]
+  appointments    Appointment[]
+  comments        Comment[]
+  ratings         Rating[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ======================================================
+// USER MODULE (Notification)
+// ======================================================
+
+model Notification {
+  id      String    @id @default(cuid())
+  userId  String
+  message String
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isRead  Boolean   @default(false)
+  status  String    @default("UNREAD")
+  readAt  DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+// ======================================================
+// DOCTOR MODULE (Leave, Schedule, Availability, Slot, Appointment)
+// ======================================================
+
+model Leave {
+  id       String @id @default(cuid())
+  doctorId String
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  reason    String
+  startDate DateTime
+  endDate   DateTime
+  applyAt   DateTime @default(now())
+
+  @@unique([doctorId, startDate, endDate])
+  @@index([doctorId])
+  @@index([startDate, endDate])
+}
+
+model Schedule {
+  id             String @id @default(cuid())
+  doctorId       String @unique
+  weeklySchedule Json
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doctorId])
+}
+
+model Slot {
+  id              String     @id @default(cuid())
+  doctorId        String
+  date            DateTime   @db.Date
+  startTime       DateTime
+  endTime         DateTime
+  status          SlotStatus @default(AVAILABLE)
+  heldByPatientId String?
+  heldAt          DateTime?
+
+  appointment Appointment?
+
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([doctorId, date, startTime])
+  @@index([doctorId, date, status])
+  @@index([startTime, status])
+  @@index([heldByPatientId])
+}
+
+model Appointment {
+  id                   String            @id @default(cuid())
+  doctorId             String
+  patientId            String
+  slotId               String            @unique 
+  status               AppointmentStatus @default(PENDING)
+  paymentMethod        PaymentMethod     @default(OFFLINE)
+  transactionId        String?
+  notes                String?
+  bookedAt             DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  slot                 Slot              @relation(fields: [slotId], references: [id])
+  doctor               Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient              Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  isAppointmentOffline Boolean           @default(true)
+
+  @@index([doctorId, patientId])
+  @@index([status])
+}
+
+// ======================================================
+// DOCTOR–PATIENT RELATION MODEL / CHAT MODEL
+// ======================================================
+
+model DoctorPatientRelation {
+  id             String @id @default(cuid())
+  doctorsUserId  String
+  patientsUserId String
+
+  chatMessages ChatMessages[]
+
+  doctor  Doctor  @relation(fields: [doctorsUserId], references: [userId], onDelete: Cascade)
+  patient Patient @relation(fields: [patientsUserId], references: [userId], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([doctorsUserId, patientsUserId])
+  @@index([patientsUserId])
+  @@index([doctorsUserId])
+}
+
+model ChatMessages {
+  id String @id @default(cuid())
+
+  doctorPatientRelationId String
+  doctorPatientRelation   DoctorPatientRelation @relation(fields: [doctorPatientRelationId], references: [id], onDelete: Cascade)
+
+  text     String
+  senderId String
+  sender   User   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doctorPatientRelationId, createdAt])
+  @@index([senderId])
+}
+
+model Payment {
+  id       String @id @default(cuid())
+  amount   Int
+  currency String @default("INR")
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status            String
+  razorpayOrderId   String   @unique
+  razorpayPaymentId String?
+  createdAt         DateTime @default(now())
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Withdrawal {
+  id       String @id @default(cuid())
+  doctorId String
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  amount   Int // Amount in paise
+  currency String           @default("INR")
+  status   WithdrawalStatus @default(PENDING)
+
+  // Razorpay payout details (if using Razorpay for payouts)
+  razorpayPayoutId String?
+  failureReason    String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  processedAt DateTime?
+
+  @@index([doctorId])
+  @@index([status])
+}
+
+model BankAccount {
+  id                    String @id @default(cuid())
+  userId                String
+  user                  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccountNumber     String @unique
+  bankIFSC              String
+  bankAccountHolderName String
+  bankName              String
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ======================================================
+// LOG MODELS
+// ======================================================
+
+model AccessLog {
+  id       String  @id @default(cuid())
+  userId   String?
+  targetId String?
+  action   String
+  tag      String? @default("SYSTEM") // e.g. AUTH, APPOINTMENT, ADMIN
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id       String  @id @default(cuid())
+  userId   String?
+  action   String
+  tag      String? @default("SYSTEM") // e.g. AUTH, SECURITY, ONBOARDING
+  metadata Json?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+}
+
+// ======================================================
+// DOCTOR REVIEW/COMMENT SYSTEM
+// ======================================================
+
+model Rating {
+  id       String @id @default(cuid())
+  doctorId String
+  patientId   String
+  rating   Int // 1-5 stars
+
+  // Relations
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([doctorId, patientId]) // One rating per user per doctor
+  @@index([doctorId])
+  @@index([patientId])
+}
+
+model Comment {
+  id       String @id @default(cuid())
+  doctorId String
+  patientId   String
+  text     String // Comment text
+
+  // Relations
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doctorId])
+  @@index([patientId])
+  @@index([createdAt])
+}
