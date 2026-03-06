@@ -27,7 +27,7 @@ const prisma = new PrismaClient({
 
 // CORS configuration
 // Normalize frontend URL by removing trailing slash to avoid CORS mismatches
-const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000' || process.env.PRODUCTION_FRONTEND_URL).replace(/\/$/, '');
 // Create array of allowed origins (with and without trailing slash for compatibility)
 const allowedOrigins = [frontendUrl, `${frontendUrl}/`];
 
