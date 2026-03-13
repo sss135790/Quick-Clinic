@@ -161,7 +161,6 @@ export default function AppointmentPage() {
                     <p><span className="font-semibold">Fees:</span> ₹{appointment.doctor.fees}</p>
                     <p><span className="font-semibold">Address:</span> {appointment.doctor.user.address}</p>
                     <p><span className="font-semibold">City:</span> {appointment.doctor.user.city}, {appointment.doctor.user.state}</p>
-                    {/* <p><span className="font-semibold">Qualifications:</span> {appointment.doctor.qualifications.join(', ')}</p> */}
                 </div>
             </div>
 
